@@ -14,10 +14,31 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v4
+      # Installs Gradle 8.9 directly, so the build does not depend on gradle/wrapper/gradle-wrapper.jar
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.9'
+
       - name: Build debug APK
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          set -o pipefail
+          gradle assembleDebug --stacktrace 2>&1 | tee build.log
+
+      - name: Show the real error
+        if: failure()
+        run: |
+          msg=$(grep -nE "^e: |error:|What went wrong|Execution failed|requires libraries|Could not |Unresolved reference|FAILURE" -A3 build.log | head -40 | cut -c1-260)
+          msg="${msg//'%'/'%25'}"
+          msg="${msg//$'\n'/'%0A'}"
+          echo "::error title=Build error details::$msg"
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v5
         with:
           name: TOM-2-Hourly-Log-APK
